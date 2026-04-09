@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.streamlit/
+dist/
+build/
+*.egg-info/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+
