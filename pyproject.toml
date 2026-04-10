@@ -22,6 +22,11 @@ dependencies = [
   "streamlit-folium>=0.24.0",
 ]
 
+[tool.poetry]
+packages = [
+  { include = "planet_water_app", from = "src" },
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
