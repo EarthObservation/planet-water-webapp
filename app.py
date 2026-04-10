@@ -64,7 +64,6 @@ def ensure_state() -> None:
     st.session_state.setdefault("analysis_error", None)
     st.session_state.setdefault("selected_interval_label", None)
     st.session_state.setdefault("composite_cache", {})
-    st.session_state.setdefault("show_oauth_values", False)
     st.session_state.setdefault("map_layer_settings", None)
 
 
@@ -97,6 +96,9 @@ def apply_custom_theme() -> None:
         <style>
         .stApp {
             background: linear-gradient(180deg, #f4fbff 0%, #ecf7fb 40%, #f7fcff 100%);
+        }
+        #MainMenu, header[data-testid="stHeader"] {
+            visibility: hidden;
         }
         .block-container {
             max-width: 1320px;
@@ -270,24 +272,16 @@ def render_header() -> None:
 def render_sidebar() -> dict[str, Any]:
     with st.sidebar:
         st.header("Inputs")
-        show_oauth_values = st.checkbox(
-            "Show OAuth values",
-            value=st.session_state["show_oauth_values"],
-            help="Reveal or hide the OAuth client ID and secret fields.",
-        )
-        st.session_state["show_oauth_values"] = show_oauth_values
-        oauth_type = "default" if show_oauth_values else "password"
-
         client_id = st.text_input(
             "OAuth client ID",
             value="",
-            type=oauth_type,
+            type="password",
             help="Optional if already configured locally.",
         )
         client_secret = st.text_input(
             "OAuth client secret",
             value="",
-            type=oauth_type,
+            type="password",
             help="Optional if already configured locally.",
         )
         collection_id = st.text_input("Planet BYOC collection ID", value=DEFAULT_COLLECTION_ID)
