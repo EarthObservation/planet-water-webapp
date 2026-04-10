@@ -68,6 +68,29 @@ def ensure_state() -> None:
     st.session_state.setdefault("map_layer_settings", None)
 
 
+def _clear_analysis_state() -> None:
+    st.session_state["analysis_result"] = None
+    st.session_state["analysis_settings"] = None
+    st.session_state["analysis_error"] = None
+    st.session_state["selected_interval_label"] = None
+    st.session_state["composite_cache"] = {}
+
+
+def _set_aoi(geojson_payload: dict[str, Any] | None, source: str | None) -> bool:
+    current_payload = st.session_state.get("aoi_geojson")
+    current_source = st.session_state.get("aoi_source")
+    payload_changed = json.dumps(current_payload, sort_keys=True) != json.dumps(geojson_payload, sort_keys=True)
+    source_changed = current_source != source
+
+    if not payload_changed and not source_changed:
+        return False
+
+    st.session_state["aoi_geojson"] = geojson_payload
+    st.session_state["aoi_source"] = source
+    _clear_analysis_state()
+    return True
+
+
 def apply_custom_theme() -> None:
     st.markdown(
         """
@@ -183,7 +206,7 @@ def add_aoi_map_legend(base_map: folium.Map) -> None:
   <div style="font-weight: 600; margin-bottom: 6px;">Legend</div>
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
     <span style="width:16px; height:12px; background:#60a5fa; border:1px solid #1d4ed8; display:inline-block;"></span>
-    <span>Selected AOI</span>
+    <span>AOI</span>
   </div>
   <div style="display:flex; align-items:center; gap:8px;">
     <span style="width:16px; height:12px; background:#f3f4f6; border:1px dashed #6b7280; display:inline-block;"></span>
@@ -220,7 +243,7 @@ def aoi_input_map(geojson_payload: dict[str, Any] | None) -> folium.Map:
             bounds = geometry.bounds
             folium.GeoJson(
                 geojson_payload,
-                name="Selected AOI",
+                name="AOI",
                 style_function=lambda _: {
                     "color": "#1d4ed8",
                     "weight": 2,
@@ -284,7 +307,7 @@ def render_sidebar() -> dict[str, Any]:
             step=0.05,
             help="Intervals below this coverage are filtered out from charts and maps.",
         )
-        analyze = st.button("Run analysis", type="primary", use_container_width=True)
+        analyze = st.button("Run analysis", type="primary", width="stretch")
 
     return {
         "client_id": client_id.strip(),
@@ -305,32 +328,28 @@ def render_aoi_picker() -> None:
     help_col, button_col = st.columns([5, 1])
     help_col.write("Draw a polygon or rectangle on the map, or upload a GeoJSON file.")
 
-    if button_col.button("Clear AOI", use_container_width=True):
-        st.session_state["aoi_geojson"] = default_aoi_geojson()
-        st.session_state["aoi_source"] = "Default AOI (Cerknisko jezero)"
-        st.session_state["analysis_result"] = None
-        st.session_state["analysis_settings"] = None
-        st.session_state["selected_interval_label"] = None
-        st.session_state["composite_cache"] = {}
+    if button_col.button("Clear AOI", width="stretch"):
+        _set_aoi(None, None)
+        st.rerun()
 
     uploaded = st.file_uploader("Upload GeoJSON AOI", type=["geojson", "json"])
     if uploaded is not None:
-        st.session_state["aoi_geojson"] = parse_uploaded_geojson(uploaded)
-        st.session_state["aoi_source"] = f"Uploaded file: {uploaded.name}"
+        uploaded_geojson = parse_uploaded_geojson(uploaded)
+        if _set_aoi(uploaded_geojson, f"Uploaded file: {uploaded.name}"):
+            st.rerun()
 
     map_state = st_folium(
         aoi_input_map(st.session_state["aoi_geojson"]),
-        width=None,
         height=460,
         returned_objects=["all_drawings"],
-        use_container_width=True,
+        width="stretch",
     )
 
     drawings = map_state.get("all_drawings") if map_state else None
     if drawings:
         geometry = drawings[-1]["geometry"]
-        st.session_state["aoi_geojson"] = feature_collection_from_geometry(geometry)
-        st.session_state["aoi_source"] = "Drawn on map"
+        if _set_aoi(feature_collection_from_geometry(geometry), "Drawn on map"):
+            st.rerun()
 
     if st.session_state["aoi_geojson"]:
         geometry = geometry_from_geojson(st.session_state["aoi_geojson"])
@@ -344,13 +363,12 @@ def render_aoi_picker() -> None:
 
 
 def render_metrics(result: AnalysisResult) -> None:
-    latest = result.series.iloc[-1]
-    peak = result.series.loc[result.series["water_area_ha"].idxmax()]
+    water_area = result.series["water_area_ha"]
     cols = st.columns(4)
     cols[0].metric("Intervals kept", f"{len(result.series)}")
-    cols[1].metric("Latest water area", f"{latest['water_area_ha']:.2f} ha")
-    cols[2].metric("Peak water area", f"{peak['water_area_ha']:.2f} ha")
-    cols[3].metric("Latest mean NDWI", f"{latest['mean_ndwi']:.3f}")
+    cols[1].metric("Min water area", f"{water_area.min():.2f} ha")
+    cols[2].metric("Median water area", f"{water_area.median():.2f} ha")
+    cols[3].metric("Max water area", f"{water_area.max():.2f} ha")
 
 
 def render_charts(result: AnalysisResult, selected_start: date | None = None) -> None:
@@ -366,26 +384,14 @@ def render_charts(result: AnalysisResult, selected_start: date | None = None) ->
         labels={"date": "Interval start", "water_area_ha": "Water area (ha)"},
         color_discrete_sequence=["#0ea5b7"],
     )
-    ndwi_chart = px.line(
-        chart_df,
-        x="date",
-        y="mean_ndwi",
-        markers=True,
-        title="Mean NDWI through time",
-        labels={"date": "Interval start", "mean_ndwi": "Mean NDWI"},
-        color_discrete_sequence=["#0369a1"],
-    )
 
     if selected_start is not None:
         selected_iso = selected_start.isoformat()
         area_chart.add_vline(x=selected_iso, line_dash="dash", line_color="#ef4444")
-        ndwi_chart.add_vline(x=selected_iso, line_dash="dash", line_color="#ef4444")
 
     area_chart.update_layout(template="plotly_white", margin={"l": 15, "r": 15, "t": 45, "b": 15})
-    ndwi_chart.update_layout(template="plotly_white", margin={"l": 15, "r": 15, "t": 45, "b": 15})
 
-    st.plotly_chart(area_chart, use_container_width=True)
-    st.plotly_chart(ndwi_chart, use_container_width=True)
+    st.plotly_chart(area_chart, width="stretch")
 
     with st.expander("Valid-pixel coverage", expanded=False):
         coverage_chart = px.bar(
@@ -399,7 +405,7 @@ def render_charts(result: AnalysisResult, selected_start: date | None = None) ->
         if selected_start is not None:
             coverage_chart.add_vline(x=selected_iso, line_dash="dash", line_color="#ef4444")
         coverage_chart.update_layout(template="plotly_white", margin={"l": 15, "r": 15, "t": 45, "b": 15})
-        st.plotly_chart(coverage_chart, use_container_width=True)
+        st.plotly_chart(coverage_chart, width="stretch")
 
 
 def render_frequency_preview(result: AnalysisResult) -> None:
@@ -408,7 +414,7 @@ def render_frequency_preview(result: AnalysisResult) -> None:
     preview[..., 2] = (frequency * 255).astype(np.uint8)
     preview[..., 1] = (frequency * 170).astype(np.uint8)
     preview[..., 3] = np.where(np.isnan(result.water_frequency), 0, 210).astype(np.uint8)
-    st.image(preview, caption="Water frequency inside the AOI", use_container_width=True)
+    st.image(preview, caption="Water frequency inside the AOI", width="stretch")
 
 
 def _interval_options(result: AnalysisResult) -> dict[str, Any]:
@@ -421,7 +427,6 @@ def _selected_interval(result: AnalysisResult) -> Any:
     preferred = st.session_state.get("selected_interval_label")
     default_value = preferred if preferred in option_map else options[-1]
 
-    st.markdown('<div class="pw-timeline">', unsafe_allow_html=True)
     st.markdown('<div class="pw-timeline-title">Interval timeline</div>', unsafe_allow_html=True)
     selected_label = st.select_slider(
         "Date points",
@@ -429,7 +434,6 @@ def _selected_interval(result: AnalysisResult) -> Any:
         value=default_value,
         help="Select a date point to update both the map and charts.",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     st.session_state["selected_interval_label"] = selected_label
     selected_interval = option_map[selected_label]
@@ -545,7 +549,6 @@ def render_map_legends(settings: dict[str, Any], selected_interval: Any) -> None
 
 
 def render_linked_map_and_charts(result: AnalysisResult, settings: dict[str, Any]) -> None:
-    st.markdown('<div class="pw-card">', unsafe_allow_html=True)
     selected_interval = _selected_interval(result)
     layer_settings = render_layer_controls()
 
@@ -569,10 +572,9 @@ def render_linked_map_and_charts(result: AnalysisResult, settings: dict[str, Any
         show_water_frequency=layer_settings["show_water_frequency"],
         show_aoi=layer_settings["show_aoi"],
     )
-    st_folium(overlay_map, width=None, height=580, use_container_width=True)
+    st_folium(overlay_map, width="stretch", height=580)
     render_map_legends(settings, selected_interval)
     render_charts(result, selected_start=selected_interval.start)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _series_for_display(result: AnalysisResult) -> pd.DataFrame:
@@ -643,7 +645,7 @@ def render_frequency_exports(result: AnalysisResult, selected_interval: Any, set
         data=selected_png,
         file_name=f"water_area_{selected_interval.start.isoformat()}_{selected_interval.end.isoformat()}.png",
         mime="image/png",
-        use_container_width=True,
+        width="stretch",
     )
     if geotiff_data is not None:
         cols[1].download_button(
@@ -651,7 +653,7 @@ def render_frequency_exports(result: AnalysisResult, selected_interval: Any, set
             data=geotiff_data,
             file_name="water_frequency_inside_aoi.tif",
             mime="image/tiff",
-            use_container_width=True,
+            width="stretch",
         )
     elif geotiff_error:
         cols[1].warning(geotiff_error)
@@ -659,8 +661,10 @@ def render_frequency_exports(result: AnalysisResult, selected_interval: Any, set
 
 def run_analysis(settings: dict[str, Any]) -> None:
     if not st.session_state["aoi_geojson"]:
-        st.session_state["aoi_geojson"] = default_aoi_geojson()
-        st.session_state["aoi_source"] = "Default AOI (Cerknisko jezero)"
+        st.session_state["analysis_error"] = "Select, draw, or upload an AOI before running the analysis."
+        st.session_state["analysis_result"] = None
+        st.session_state["analysis_settings"] = None
+        return
 
     if settings["start_date"] > settings["end_date"]:
         st.session_state["analysis_error"] = "The start date must be before or equal to the end date."
@@ -726,7 +730,7 @@ def render_results(result: AnalysisResult, settings: dict[str, Any]) -> None:
 
     with st.expander("Data table and time-series CSV", expanded=False):
         table = _series_for_display(result)
-        st.dataframe(table, use_container_width=True)
+        st.dataframe(table, width="stretch")
         csv_data = table.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Download time-series CSV",
