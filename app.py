@@ -97,13 +97,58 @@ def apply_custom_theme() -> None:
         .stApp {
             background: linear-gradient(180deg, #f4fbff 0%, #ecf7fb 40%, #f7fcff 100%);
         }
-        #MainMenu, header[data-testid="stHeader"] {
+        #MainMenu {
             visibility: hidden;
+        }
+        [data-testid="stToolbar"] {
+            background: linear-gradient(90deg, #d8ecfb 0%, #eaf5fc 100%);
+            border-bottom: 1px solid #bfd8e7;
+        }
+        [data-testid="stToolbar"] button[data-testid="stExpandSidebarButton"] {
+            background: rgba(14, 122, 159, 0.12);
+            border-radius: 10px;
+        }
+        [data-testid="stToolbar"] button[data-testid="stExpandSidebarButton"]:hover {
+            background: rgba(14, 122, 159, 0.2);
         }
         .block-container {
             max-width: 1320px;
-            padding-top: 1.2rem;
+            padding-top: 2rem;
             padding-bottom: 2rem;
+        }
+        .pw-header {
+            margin: 0.8rem 0 1.6rem 0;
+        }
+        .pw-header-title {
+            margin: 0;
+            color: #2f3444;
+            font-size: clamp(2.2rem, 4.2vw, 3.3rem);
+            line-height: 1.04;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+        .pw-header-caption {
+            margin-top: 0.85rem;
+            color: #738295;
+            font-size: 1rem;
+        }
+        .pw-header-guide {
+            margin-top: 1rem;
+            color: #56748a;
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
+        .pw-header-guide strong {
+            color: #0b4f6c;
+        }
+        .pw-footer {
+            margin-top: 2rem;
+            padding-top: 0.85rem;
+            border-top: 1px solid #d8e7f0;
+            color: #7b8ca0;
+            font-size: 0.88rem;
+            line-height: 1.45;
+            text-align: center;
         }
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0b607d 0%, #0e7a9f 60%, #118ab2 100%);
@@ -265,8 +310,22 @@ def aoi_input_map(geojson_payload: dict[str, Any] | None) -> folium.Map:
 def render_header() -> None:
     st.set_page_config(page_title="Planet Water Monitor", layout="wide")
     apply_custom_theme()
-    st.title("Planet Water Monitor")
-    st.caption("Interactive water monitoring application.")
+    st.markdown(
+        """
+        <section class="pw-header">
+          <h1 class="pw-header-title">Planet Water Monitor</h1>
+          <div class="pw-header-caption">Interactive water monitoring application.</div>
+          <div class="pw-header-guide">
+            <strong>Quick start</strong><br>
+            1. ✏️ draw or upload an AOI<br>
+            2. 📅 choose dates<br>
+            3. ▶️ run<br>
+            4. 📊 analyse
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_sidebar() -> dict[str, Any]:
@@ -750,6 +809,11 @@ def main() -> None:
     if result is not None:
         active_settings = st.session_state["analysis_settings"] or settings
         render_results(result, active_settings)
+
+    st.markdown(
+        '<div class="pw-footer">(c) 2026 University of Ljubljana, Faculty of Civil and Geodetic Engineering</div>',
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
