@@ -364,6 +364,11 @@ def build_web_map(
     show_water_mask: bool,
     show_water_frequency: bool,
     show_aoi: bool,
+    true_color_opacity: float,
+    false_color_opacity: float,
+    water_mask_opacity: float,
+    water_frequency_opacity: float,
+    aoi_fill_opacity: float,
 ) -> folium.Map:
     min_x, min_y, max_x, max_y = bounds
     center = [(min_y + max_y) / 2, (min_x + max_x) / 2]
@@ -374,7 +379,7 @@ def build_web_map(
             image=true_color,
             bounds=[[min_y, min_x], [max_y, max_x]],
             name="True color composite",
-            opacity=0.95,
+            opacity=true_color_opacity,
             interactive=True,
             show=True,
         ).add_to(folium_map)
@@ -384,7 +389,7 @@ def build_web_map(
             image=false_color,
             bounds=[[min_y, min_x], [max_y, max_x]],
             name="False color composite",
-            opacity=0.95,
+            opacity=false_color_opacity,
             interactive=True,
             show=True,
         ).add_to(folium_map)
@@ -393,7 +398,7 @@ def build_web_map(
         image=_water_overlay(ndwi_raster, water_threshold),
         bounds=[[min_y, min_x], [max_y, max_x]],
         name="Detected water mask",
-        opacity=0.75,
+        opacity=water_mask_opacity,
         interactive=True,
         show=show_water_mask,
     ).add_to(folium_map)
@@ -402,7 +407,7 @@ def build_web_map(
         image=_frequency_overlay(water_frequency),
         bounds=[[min_y, min_x], [max_y, max_x]],
         name="Water frequency",
-        opacity=0.6,
+        opacity=water_frequency_opacity,
         interactive=True,
         show=show_water_frequency,
     ).add_to(folium_map)
@@ -415,7 +420,7 @@ def build_web_map(
             "color": "#ef4444",
             "weight": 2,
             "fillColor": "#ef4444",
-            "fillOpacity": 0.08,
+            "fillOpacity": aoi_fill_opacity,
         },
     ).add_to(folium_map)
 

@@ -461,6 +461,32 @@ def render_charts(result: AnalysisResult, selected_start: date | None = None) ->
         st.plotly_chart(coverage_chart, width="stretch")
 
 
+def render_ndwi_histogram(selected_interval: Any, water_threshold: float) -> None:
+    ndwi_values = selected_interval.raster[np.isfinite(selected_interval.raster)]
+    if ndwi_values.size == 0:
+        st.info("No valid NDWI pixels are available for the selected interval.")
+        return
+
+    histogram_df = pd.DataFrame({"ndwi": ndwi_values})
+    histogram = px.histogram(
+        histogram_df,
+        x="ndwi",
+        nbins=60,
+        title="NDWI distribution for the selected interval",
+        labels={"ndwi": "NDWI", "count": "Pixels"},
+        color_discrete_sequence=["#0ea5b7"],
+    )
+    histogram.add_vline(
+        x=water_threshold,
+        line_dash="dash",
+        line_color="#ef4444",
+        annotation_text=f"Threshold {water_threshold:.2f}",
+        annotation_position="top right",
+    )
+    histogram.update_layout(template="plotly_white", margin={"l": 15, "r": 15, "t": 45, "b": 15})
+    st.plotly_chart(histogram, width="stretch")
+
+
 def render_frequency_preview(result: AnalysisResult) -> None:
     frequency = np.nan_to_num(result.water_frequency, nan=0.0)
     preview = np.zeros((*frequency.shape, 4), dtype=np.uint8)
@@ -546,14 +572,23 @@ def _cached_composite(
     return cache[cache_key]
 
 
-def render_layer_controls() -> dict[str, bool]:
-    settings = st.session_state.get("map_layer_settings") or {
+def _default_map_layer_settings() -> dict[str, Any]:
+    return {
         "show_true_color": False,
         "show_false_color": False,
         "show_water_mask": True,
         "show_water_frequency": False,
         "show_aoi": False,
+        "true_color_opacity": 0.95,
+        "false_color_opacity": 0.95,
+        "water_mask_opacity": 0.75,
+        "water_frequency_opacity": 0.6,
+        "aoi_fill_opacity": 0.08,
     }
+
+
+def render_layer_controls() -> dict[str, Any]:
+    settings = st.session_state.get("map_layer_settings") or _default_map_layer_settings()
     st.markdown("#### Map layers")
     cols = st.columns(5)
     settings["show_true_color"] = cols[0].checkbox("True color", value=settings["show_true_color"])
@@ -561,6 +596,49 @@ def render_layer_controls() -> dict[str, bool]:
     settings["show_water_mask"] = cols[2].checkbox("Water mask", value=settings["show_water_mask"])
     settings["show_water_frequency"] = cols[3].checkbox("Water frequency", value=settings["show_water_frequency"])
     settings["show_aoi"] = cols[4].checkbox("AOI", value=settings["show_aoi"])
+
+    controls_col, reset_col = st.columns([5, 1])
+    with controls_col.expander("Layer opacity", expanded=False):
+        slider_cols = st.columns(2)
+        settings["true_color_opacity"] = slider_cols[0].slider(
+            "True color opacity",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(settings["true_color_opacity"]),
+            step=0.05,
+        )
+        settings["false_color_opacity"] = slider_cols[1].slider(
+            "False color opacity",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(settings["false_color_opacity"]),
+            step=0.05,
+        )
+        settings["water_mask_opacity"] = slider_cols[0].slider(
+            "Water mask opacity",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(settings["water_mask_opacity"]),
+            step=0.05,
+        )
+        settings["water_frequency_opacity"] = slider_cols[1].slider(
+            "Water frequency opacity",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(settings["water_frequency_opacity"]),
+            step=0.05,
+        )
+        settings["aoi_fill_opacity"] = slider_cols[0].slider(
+            "AOI fill opacity",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(settings["aoi_fill_opacity"]),
+            step=0.05,
+        )
+
+    if reset_col.button("Reset", width="stretch", help="Restore default layer visibility and opacity settings."):
+        settings = _default_map_layer_settings()
+
     st.session_state["map_layer_settings"] = settings
     return settings
 
@@ -624,10 +702,17 @@ def render_linked_map_and_charts(result: AnalysisResult, settings: dict[str, Any
         show_water_mask=layer_settings["show_water_mask"],
         show_water_frequency=layer_settings["show_water_frequency"],
         show_aoi=layer_settings["show_aoi"],
+        true_color_opacity=layer_settings["true_color_opacity"],
+        false_color_opacity=layer_settings["false_color_opacity"],
+        water_mask_opacity=layer_settings["water_mask_opacity"],
+        water_frequency_opacity=layer_settings["water_frequency_opacity"],
+        aoi_fill_opacity=layer_settings["aoi_fill_opacity"],
     )
     st_folium(overlay_map, width="stretch", height=580)
     render_map_legends(settings, selected_interval)
     render_charts(result, selected_start=selected_interval.start)
+    with st.expander("NDWI histogram", expanded=False):
+        render_ndwi_histogram(selected_interval, settings["water_threshold"])
 
 
 def _series_for_display(result: AnalysisResult) -> pd.DataFrame:
