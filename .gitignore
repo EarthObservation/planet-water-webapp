@@ -2,7 +2,8 @@
 __pycache__/
 .pytest_cache/
 .mypy_cache/
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 dist/
 build/
 *.egg-info/
