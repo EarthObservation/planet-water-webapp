@@ -29,6 +29,12 @@ DEFAULT_COLLECTION_ID = "8523c8f2-e983-4a9c-8e69-88365d946cbf"
 DEFAULT_CENTER = (46.1199, 14.8153)
 # Rectangle similar to the AOI shown in the user's screenshot.
 DEFAULT_AOI_BOUNDS = (14.36048, 45.72536, 14.39034, 45.74489)
+DEFAULT_START_DATE = date(2025, 1, 1)
+DEFAULT_END_DATE = date(2025, 12, 31)
+DEFAULT_INTERVAL = "Monthly"
+DEFAULT_RESOLUTION = 3
+DEFAULT_WATER_THRESHOLD = -0.4
+DEFAULT_MINIMUM_VALID_FRACTION = 0.6
 
 
 def default_aoi_geojson() -> dict[str, Any]:
@@ -65,6 +71,13 @@ def ensure_state() -> None:
     st.session_state.setdefault("selected_interval_label", None)
     st.session_state.setdefault("composite_cache", {})
     st.session_state.setdefault("map_layer_settings", None)
+    st.session_state.setdefault("collection_id", DEFAULT_COLLECTION_ID)
+    st.session_state.setdefault("start_date", DEFAULT_START_DATE)
+    st.session_state.setdefault("end_date", DEFAULT_END_DATE)
+    st.session_state.setdefault("interval", DEFAULT_INTERVAL)
+    st.session_state.setdefault("resolution", DEFAULT_RESOLUTION)
+    st.session_state.setdefault("water_threshold", DEFAULT_WATER_THRESHOLD)
+    st.session_state.setdefault("minimum_valid_fraction", DEFAULT_MINIMUM_VALID_FRACTION)
 
 
 def _clear_analysis_state() -> None:
@@ -88,6 +101,20 @@ def _set_aoi(geojson_payload: dict[str, Any] | None, source: str | None) -> bool
     st.session_state["aoi_source"] = source
     _clear_analysis_state()
     return True
+
+
+def _reset_non_oauth_inputs() -> None:
+    st.session_state["collection_id"] = DEFAULT_COLLECTION_ID
+    st.session_state["start_date"] = DEFAULT_START_DATE
+    st.session_state["end_date"] = DEFAULT_END_DATE
+    st.session_state["interval"] = DEFAULT_INTERVAL
+    st.session_state["resolution"] = DEFAULT_RESOLUTION
+    st.session_state["water_threshold"] = DEFAULT_WATER_THRESHOLD
+    st.session_state["minimum_valid_fraction"] = DEFAULT_MINIMUM_VALID_FRACTION
+    st.session_state["aoi_geojson"] = default_aoi_geojson()
+    st.session_state["aoi_source"] = "Default AOI (Cerknisko jezero)"
+    st.session_state["map_layer_settings"] = _default_map_layer_settings()
+    _clear_analysis_state()
 
 
 def apply_custom_theme() -> None:
@@ -172,6 +199,27 @@ def apply_custom_theme() -> None:
         [data-testid="stSidebar"] input::placeholder {
             color: #64748b !important;
             opacity: 1;
+        }
+        [data-testid="stSidebar"] .stButton > button {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(191, 216, 231, 0.9);
+        }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"],
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] p,
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] span {
+            color: #0b607d !important;
+        }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+            background: #ffffff;
+        }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover p,
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover span {
+            color: #094b61 !important;
         }
         .pw-card {
             border: 1px solid #cfe3ef;
@@ -343,23 +391,24 @@ def render_sidebar() -> dict[str, Any]:
             type="password",
             help="Optional if already configured locally.",
         )
-        collection_id = st.text_input("Planet BYOC collection ID", value=DEFAULT_COLLECTION_ID)
+        collection_id = st.text_input("Planet BYOC collection ID", key="collection_id")
 
         date_cols = st.columns(2)
-        start_date = date_cols[0].date_input("Start date", value=date(2025, 1, 1), format="YYYY-MM-DD")
-        end_date = date_cols[1].date_input("End date", value=date(2025, 12, 31), format="YYYY-MM-DD")
-        interval = st.selectbox("Time-series interval", options=["Weekly", "Monthly", "Quarterly"], index=1)
+        start_date = date_cols[0].date_input("Start date", key="start_date", format="YYYY-MM-DD")
+        end_date = date_cols[1].date_input("End date", key="end_date", format="YYYY-MM-DD")
+        interval = st.selectbox("Time-series interval", options=["Weekly", "Monthly", "Quarterly"], key="interval")
 
-        resolution = st.slider("Resolution (m)", min_value=3, max_value=12, value=3)
-        water_threshold = st.slider("Water threshold (NDWI)", min_value=-1.0, max_value=1.0, value=-0.4, step=0.05)
+        resolution = st.slider("Resolution (m)", min_value=3, max_value=12, key="resolution")
+        water_threshold = st.slider("Water threshold (NDWI)", min_value=-1.0, max_value=1.0, step=0.05, key="water_threshold")
         minimum_valid_fraction = st.slider(
             "Minimum valid-pixel fraction",
             min_value=0.0,
             max_value=1.0,
-            value=0.6,
             step=0.05,
+            key="minimum_valid_fraction",
             help="Intervals below this coverage are filtered out from charts and maps.",
         )
+        st.button("Reset inputs", width="stretch", on_click=_reset_non_oauth_inputs)
         analyze = st.button("Run analysis", type="primary", width="stretch")
 
     return {
