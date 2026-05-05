@@ -25,7 +25,7 @@ from planet_water_app.analysis import (
     geometry_from_geojson,
 )
 
-DEFAULT_COLLECTION_ID = "8523c8f2-e983-4a9c-8e69-88365d946cbf"
+DEFAULT_COLLECTION_ID = "16d995c8-29e7-4b34-8f6d-71e44fdbfcb7"
 DEFAULT_CENTER = (46.1199, 14.8153)
 # Rectangle similar to the AOI shown in the user's screenshot.
 DEFAULT_AOI_BOUNDS = (14.36048, 45.72536, 14.39034, 45.74489)
